@@ -93,19 +93,30 @@ class PatchLayer:
     """Context‑manager: capture donor activation at layer ℓ and replay into target."""
 
     def __init__(self, model, layer_id: int):
-        self.model = model; self.ℓ = layer_id; self.store = None
-        self.layer = model.transformer.h[layer_id]
+        self.model = model
+        self.ℓ = layer_id
+        self.store = None
+        self.layer = model.model.layers[layer_id]
 
     def __enter__(self):
         self.h1 = self.layer.register_forward_hook(self._capture)
         return self
 
     def _capture(self, module, inp, out):
-        self.store = out.detach().clone()
+        # For Mistral, the hidden state is the first element of the output tuple
+        if isinstance(out, tuple):
+            hidden_state = out[0]
+        else:
+            hidden_state = out
+        self.store = hidden_state.detach().clone()
 
     def patch(self, *args):
-        # second hook replaces activation with stored donor
-        return self.layer.register_forward_hook(lambda m, i, o: self.store)
+        def patch_hook(module, inp, out):
+            if isinstance(out, tuple):
+                # Replace the hidden state (first element) while keeping other elements
+                return (self.store,) + out[1:]
+            return self.store
+        return self.layer.register_forward_hook(patch_hook)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.h1.remove()
@@ -114,8 +125,9 @@ class PatchLayer:
 @torch.no_grad()
 def forward_logits(model, tokenizer, prompt: str):
     ids = tokenizer(prompt, return_tensors="pt").to(DEVICE)
-    out = model(**ids)
-    return out.logits[:, -1, :].cpu()
+    outputs = model(**ids, output_hidden_states=True)
+    # Get the last token's logits
+    return outputs.logits[:, -1, :].cpu()
 
 
 DIGIT_TOKENS = [str(i) for i in range(10)]
@@ -126,41 +138,16 @@ def decode_digit(logits, tokenizer):
 
 
 def run_patched_pair(model, tokenizer, promptA: str, promptB: str, layer: int) -> Tuple[float, float, float]:
-    """Run activation patching from B → A on the given layer."""
-    # Get hidden states for both prompts
-    with torch.no_grad():
-        inputsA = tokenizer(promptA, return_tensors="pt")
-        inputsB = tokenizer(promptB, return_tensors="pt")
-        inputsA = {k: v.to(DEVICE) for k, v in inputsA.items()}  # Move to device
-        inputsB = {k: v.to(DEVICE) for k, v in inputsB.items()}  # Move to device
-        outA = model(**inputsA, output_hidden_states=True)
-        outB = model(**inputsB, output_hidden_states=True)
-    
-    # Patch layer ℓ in A with activations from B
-    patched = outA.hidden_states.copy()
-    patched[layer] = outB.hidden_states[layer]
-    
-    # Run patched version
-    with torch.no_grad():
-        out_patched = model(**inputsA, hidden_states=patched)
-    
-    # Get logits for the answer token
-    logitsA = outA.logits[0, -1]
-    logitsB = outB.logits[0, -1]
-    logits_patched = out_patched.logits[0, -1]
-    
-    # Convert to probabilities
-    probsA = torch.softmax(logitsA, dim=-1)
-    probsB = torch.softmax(logitsB, dim=-1)
-    probs_patched = torch.softmax(logits_patched, dim=-1)
-    
-    # Get expected value under each distribution
-    tokens = torch.arange(len(probsA)).to(logitsA.device)
-    yA = (probsA * tokens).sum().item()
-    yB = (probsB * tokens).sum().item()
-    yApatched = (probs_patched * tokens).sum().item()
-    
-    return yA, yB, yApatched
+    # donor pass – capture
+    with PatchLayer(model, layer) as ctx:
+        _ = forward_logits(model, tokenizer, promptB)
+        # patch into A
+        handle = ctx.patch()
+        logits_Apatched = forward_logits(model, tokenizer, promptA)
+        handle.remove()
+    logits_A = forward_logits(model, tokenizer, promptA)
+    logits_B = forward_logits(model, tokenizer, promptB)
+    return decode_digit(logits_A, tokenizer), decode_digit(logits_B, tokenizer), decode_digit(logits_Apatched, tokenizer)
 
 
 # --------------------------------------------------------------------------- #
@@ -176,7 +163,7 @@ def load_or_generate(args):
         df = df[pd.to_numeric(df["answer"], errors="coerce").notnull()].copy()
         df["answer"] = df["answer"].astype(int)
         rows = df.apply(prompt_from_row, axis=1).tolist()
-        return pd.DataFrame(rows, columns=["prompt", "count"]).sample(n=50, random_state=0)  # Use 50 examples for testing
+        return pd.DataFrame(rows, columns=["prompt", "count"]).sample(n=500, random_state=0)  # Use 500 examples for testing
     else:
         raise ValueError(f"Data file {args.data_csv} not found!")
 
@@ -260,7 +247,7 @@ if __name__ == "__main__":
                       help="Path to CSV file with benchmark data")
     parser.add_argument("--top_k", type=int, default=4,
                       help="Number of top layers to analyze")
-    parser.add_argument("--num_mediation_pairs", type=int, default=300,
+    parser.add_argument("--num_mediation_pairs", type=int, default=50,
                       help="Number of mediation pairs to test")
     args = parser.parse_args()
     
