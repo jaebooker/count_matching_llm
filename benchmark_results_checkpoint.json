@@ -1,0 +1,60 @@
+[
+  {
+    "model_name": "mistral",
+    "model_type": "ollama",
+    "accuracy": 0.5848,
+    "correct": 2924,
+    "total": 5000,
+    "results": [
+      {
+        "prompt": "Given a list of words and a category, count how many words in the list belong to that category.\nCategory: fruit\nList: ['lemon', 'pear', 'cat', 'glass', 'bus', 'subway', 'scooter', 'orange']\nCount: ",
+        "response": "2 (words belonging to the category \"fruit\" are 'lemon' and 'orange')",
+        "prediction": 2,
+        "ground_truth": 
+
+
+[
+  {
+    "model_name": "codellama",
+    "model_type": "ollama",
+    "accuracy": 0.1692,
+    "correct": 846,
+    "total": 5000,
+    "results": [
+      {
+        "prompt": "Given a list of words and a category, count how many words in the list belong to that category.\nCategory: fruit\nList: ['lemon', 'pear', 'cat', 'glass', 'bus', 'subway', 'scooter', 'orange']\nCount: ",
+        "response": "\nThe category \"fruit\" has 4 words in the list: lemon, pear, orange, and citrus (all of which are fruits).",
+        "prediction": 4,
+        "ground_truth": 
+
+
+[
+  {
+    "model_name": "mistralai/Mistral-7B-Instruct-v0.2",
+    "model_type": "together",
+    "accuracy": 0.4898,
+    "correct": 2449,
+    "total": 5000,
+    "results": [
+      {
+        "prompt": "Given a list of words and a category, count how many words in the list belong to that category.\nCategory: fruit\nList: ['lemon', 'pear', 'cat', 'glass', 'bus', 'subway', 'scooter', 'orange']\nCount: ",
+        "response": "1\n```",
+        "prediction": 1,
+        "ground_truth": 
+
+  {
+    "model_name": "llama2",
+    "model_type": "ollama",
+    "accuracy": 0.1282,
+    "correct": 641,
+    "total": 5000,
+    "results": [
+      {
+[
+  {
+    "model_name": "starling-lm",
+    "model_type": "ollama",
+    "accuracy": 0.6308,
+    "correct": 3154,
+    "total": 5000,
+    "results": [
