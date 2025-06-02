@@ -1,6 +1,6 @@
 # LLM Count Matching Benchmark
 
-This benchmark evaluates various open-weight language models on a word counting task. The task involves counting how many words in a given list belong to a specific category.
+This benchmark evaluates various open-weight language models on a word counting task. The task involves counting how many words in a given list belong to a specific category. It also creates a causal mediation analysis experiment (patching from one run to another) to try to answer: "is there a hidden state layer that contains a representation of the running count of matching words, while processing the list of words?"
 
 ## Setup
 
